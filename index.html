@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="ko" data-sky="clouds">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>아침 날씨</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root {
+    --text: #ffffff;
+    --text-soft: rgba(255,255,255,.78);
+    --card: rgba(10, 30, 60, .22);
+    --card-line: rgba(255,255,255,.22);
+    --chip: rgba(255,255,255,.16);
+    --sky-top: #1f6fc4;
+    --sky-bottom: #6fb6ea;
+  }
+  /* ── 날씨별 하늘 색 ── */
+  html[data-sky="clear"]        { --sky-top:#1d6cc2; --sky-bottom:#5fb0ea; }
+  html[data-sky="clouds"]       { --sky-top:#4f6f94; --sky-bottom:#93aac4; }
+  html[data-sky="rain"]         { --sky-top:#2e3f55; --sky-bottom:#5f7389; }
+  html[data-sky="thunder"]      { --sky-top:#1b1f33; --sky-bottom:#4a4566; }
+  html[data-sky="snow"]         { --sky-top:#6f86a3; --sky-bottom:#b7c6d8; --card: rgba(20,40,70,.28); }
+  html[data-sky="mist"]         { --sky-top:#6c7a86; --sky-bottom:#a9b3ba; --card: rgba(20,35,50,.28); }
+  html[data-sky="clear-night"]  { --sky-top:#0b1430; --sky-bottom:#24365f; }
+  html[data-sky="clouds-night"] { --sky-top:#141b2b; --sky-bottom:#36425a; }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html {
+    -webkit-text-size-adjust: 100%;
+    min-height: 100%;
+    background: #1d6cc2;
+    background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 100%);
+    transition: background .8s ease;
+  }
+  body {
+    min-height: 100vh;
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 40px; }
+
+  /* ── 상단: 검색창 ── */
+  .top { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .brand { font-weight: 700; font-size: 18px; letter-spacing: -0.02em; }
+  .brand small { display: block; font-weight: 500; font-size: 13px; color: var(--text-soft); margin-top: 2px; }
+  .search { flex: 1 1 300px; max-width: 420px; display: flex; background: var(--card); border: 1px solid var(--card-line);
+    border-radius: 999px; overflow: hidden; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  .search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit;
+    font-size: 15px; padding: 11px 16px; outline: none; }
+  .search input::placeholder { color: var(--text-soft); }
+  .search button { border: 0; background: rgba(255,255,255,.2); color: var(--text); font: inherit; font-weight: 600;
+    font-size: 14px; padding: 0 18px; cursor: pointer; }
+  .search button:hover { background: rgba(255,255,255,.3); }
+  .notice { min-height: 20px; margin-top: 8px; font-size: 13px; color: var(--text-soft); text-align: right; }
+
+  .card { background: var(--card); border: 1px solid var(--card-line); border-radius: 20px;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+  h2 { font-size: 14px; font-weight: 600; color: var(--text-soft); margin-bottom: 12px; letter-spacing: -0.01em; }
+
+  /* ── 가운데: 현재 날씨 + 상세 ── */
+  .now { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; margin-top: 8px; }
+  .hero { padding: 24px; display: flex; flex-direction: column; justify-content: space-between; gap: 16px; }
+  .place { font-size: 20px; font-weight: 700; }
+  .place span { display: block; font-size: 13px; font-weight: 500; color: var(--text-soft); margin-top: 4px; }
+  .place-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+  .fav-toggle { border: 1px solid var(--card-line); background: var(--chip); color: var(--text); font: inherit; font-size: 13px;
+    font-weight: 600; padding: 5px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+  .fav-toggle:hover { background: rgba(255,255,255,.26); }
+  .fav-toggle.on { background: #ffd36e; color: #3b2a00; border-color: transparent; }
+
+  /* ── 즐겨찾기 도시 목록 ── */
+  .favs { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .favs .label { font-size: 13px; font-weight: 700; margin-right: 2px; }
+  .favs .empty { font-size: 13px; color: var(--text-soft); }
+  .fav { display: inline-flex; align-items: stretch; border: 1px solid var(--card-line); background: var(--card); border-radius: 999px;
+    overflow: hidden; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  .fav.current { background: rgba(255,255,255,.88); border-color: transparent; }
+  .fav.current button { color: #18324f; }
+  .fav button { border: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer; }
+  .fav .go { font-size: 14px; font-weight: 600; padding: 7px 4px 7px 14px; }
+  .fav .x { font-size: 16px; line-height: 1; padding: 0 12px 0 8px; opacity: .7; }
+  .fav .x:hover { opacity: 1; }
+  .fav button:hover { background: rgba(255,255,255,.12); }
+  .temp-row { display: flex; align-items: center; gap: 12px; }
+  .temp-row svg { width: 96px; height: 96px; flex: none; }
+  .big-temp { font-size: 84px; font-weight: 300; line-height: 1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+  .big-temp sup { font-size: 34px; font-weight: 400; vertical-align: top; position: relative; top: 8px; margin-left: 2px; }
+  .desc { font-size: 17px; font-weight: 600; }
+  .sub { font-size: 14px; color: var(--text-soft); margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .tip { font-size: 14px; background: var(--chip); border-radius: 12px; padding: 10px 12px; line-height: 1.45; }
+
+  .details { padding: 20px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; align-content: start; }
+  .details h2 { grid-column: 1 / -1; margin-bottom: 2px; }
+  .d { background: var(--chip); border-radius: 14px; padding: 12px 14px; }
+  .d .k { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-soft); }
+  .d .k svg { width: 16px; height: 16px; flex: none; }
+  .d .v { font-size: 20px; font-weight: 600; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .d .v small { font-size: 13px; font-weight: 500; color: var(--text-soft); margin-left: 3px; }
+
+  /* ── 아래: 3시간 예보 ── */
+  .hourly { margin-top: 16px; padding: 20px; }
+  .hours { display: grid; grid-template-columns: repeat(8, minmax(72px, 1fr)); gap: 8px; overflow-x: auto;
+    scrollbar-width: thin; padding-bottom: 4px; }
+  .h { text-align: center; padding: 12px 4px; border-radius: 14px; background: var(--chip); }
+  .h.wet { background: rgba(120,190,255,.28); box-shadow: inset 0 0 0 1px rgba(170,215,255,.45); }
+  .h .t { font-size: 13px; color: var(--text-soft); }
+  .h svg { width: 36px; height: 36px; margin: 6px auto; display: block; }
+  .h .c { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .h .p { font-size: 12px; color: #cfe8ff; margin-top: 4px; min-height: 15px; font-variant-numeric: tabular-nums; }
+
+  /* ── 아래: 5일 예보 ── */
+  .daily { margin-top: 16px; padding: 20px; }
+  .day { display: grid; grid-template-columns: 72px 36px 52px 1fr 40px 40px; align-items: center; gap: 10px;
+    padding: 10px 0; border-top: 1px solid var(--card-line); font-variant-numeric: tabular-nums; }
+  .day:first-of-type { border-top: 0; }
+  .day .n { font-weight: 600; font-size: 15px; }
+  .day .n small { display: block; font-size: 12px; font-weight: 500; color: var(--text-soft); }
+  .day svg { width: 32px; height: 32px; }
+  .day .pop { font-size: 13px; color: #cfe8ff; white-space: nowrap; }
+  .day .lo { text-align: right; color: var(--text-soft); font-size: 15px; }
+  .day .hi { font-weight: 600; font-size: 15px; }
+  .bar { position: relative; height: 6px; border-radius: 3px; background: rgba(255,255,255,.18); }
+  .bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px;
+    background: linear-gradient(90deg, #8fd3ff, #ffd36e); }
+
+  /* ── 하늘 미리보기 (테스트용) ── */
+  .preview { margin-top: 16px; padding: 14px 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .preview b { font-size: 13px; font-weight: 600; color: var(--text-soft); margin-right: 4px; }
+  .preview button { border: 1px solid var(--card-line); background: var(--chip); color: var(--text); font: inherit;
+    font-size: 13px; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+  .preview button[aria-pressed="true"] { background: rgba(255,255,255,.85); color: #18324f; font-weight: 600; }
+  .foot { margin-top: 14px; font-size: 12px; color: var(--text-soft); text-align: center; }
+
+  /* ── 휴대폰 화면 ── */
+  @media (max-width: 720px) {
+    .wrap { padding: 16px 16px 32px; }
+    .search { max-width: none; flex-basis: 100%; }
+    .notice { text-align: left; }
+    .now { grid-template-columns: 1fr; }
+    .hero { padding: 20px; }
+    .big-temp { font-size: 72px; }
+    .temp-row svg { width: 80px; height: 80px; }
+    .details { grid-template-columns: repeat(2, 1fr); padding: 16px; }
+    .hourly, .daily { padding: 16px; }
+    .hours { grid-template-columns: repeat(4, 1fr); overflow: visible; }
+    .day { grid-template-columns: 40px 28px 48px 1fr 30px 30px; gap: 6px; }
+    .day .pop { font-size: 12px; white-space: nowrap; }
+    .day .lo, .day .hi { font-size: 14px; }
+    .day svg { width: 28px; height: 28px; }
+  }
+  @media (max-width: 360px) {
+    .big-temp { font-size: 60px; }
+    .d .v { font-size: 18px; }
+  }
+
+  /* ── 키 입력, 검색 후보, 상태 표시 (API 연결용 추가) ── */
+  .top-actions { min-width: 0; display: flex; gap: 8px; align-items: center; flex: 1 1 300px; max-width: 520px; justify-content: flex-end; }
+  .top-actions .search { flex: 1; }
+  .icon-btn { flex: none; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--card-line); background: var(--card);
+    color: var(--text); cursor: pointer; display: grid; place-items: center; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  .icon-btn:hover { background: rgba(255,255,255,.25); }
+  .icon-btn svg { width: 20px; height: 20px; }
+  .icon-btn.spin svg { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .search-box { position: relative; flex: 1; min-width: 0; }
+  .search-box .search input { width: 100%; }
+  .search-box .search { max-width: none; }
+  .results { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 10; list-style: none; border-radius: 16px;
+    background: rgba(20, 40, 70, .92); border: 1px solid var(--card-line); overflow: hidden; backdrop-filter: blur(12px); }
+  .results[hidden] { display: none; }
+  .results button { width: 100%; text-align: left; border: 0; background: transparent; color: var(--text); font: inherit;
+    font-size: 15px; padding: 12px 16px; cursor: pointer; border-top: 1px solid rgba(255,255,255,.1); }
+  .results li:first-child button { border-top: 0; }
+  .results button:hover, .results button:focus { background: rgba(255,255,255,.14); outline: none; }
+  .results small { color: var(--text-soft); margin-left: 6px; font-size: 13px; }
+  .notice.error { color: #ffd9d4; font-weight: 600; }
+
+  .keybar { margin-top: 14px; padding: 12px 14px; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+  .keybar label { font-size: 13px; font-weight: 700; flex: none; }
+  .keybar form { display: flex; gap: 6px; flex: 1 1 360px; min-width: 0; }
+  .keybar input { flex: 1; min-width: 0; width: 100%; border: 1px solid var(--card-line); background: rgba(255,255,255,.12);
+    color: var(--text); font: inherit; font-size: 14px; padding: 9px 12px; border-radius: 10px; outline: none; }
+  .keybar input::placeholder { color: var(--text-soft); }
+  .keybar input:focus { border-color: rgba(255,255,255,.6); }
+  .keybar button { flex: none; border: 1px solid var(--card-line); background: var(--chip); color: var(--text); font: inherit;
+    font-size: 13px; font-weight: 600; padding: 0 12px; border-radius: 10px; cursor: pointer; }
+  .keybar button.primary { background: rgba(255,255,255,.9); color: #18324f; border-color: transparent; font-weight: 700; }
+  .keybar button:hover { filter: brightness(1.1); }
+  .keybar .state { font-size: 13px; color: var(--text-soft); flex: 1 1 100%; }
+  .keybar .state a { color: #fff; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+    background: #ffd36e; color: #3b2a00; margin-left: 6px; vertical-align: 2px; }
+  main.loading .card { opacity: .6; transition: opacity .2s; }
+  .h .t small { display: block; font-size: 11px; color: #ffe6a3; }
+  @media (max-width: 720px) {
+    .top-actions { max-width: none; flex-basis: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">아침 날씨<small id="today"></small></div>
+    <div class="top-actions">
+      <div class="search-box">
+        <form class="search" id="searchForm" role="search" autocomplete="off">
+          <input id="q" type="search" placeholder="도시 이름을 입력하세요 (예: 부산)" aria-label="도시 검색">
+          <button type="submit">검색</button>
+        </form>
+        <ul class="results" id="results" hidden></ul>
+      </div>
+      <button class="icon-btn" id="refreshBtn" type="button" title="새로고침" aria-label="새로고침">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 10a6 6 0 1 1-1.8-4.3M16 3.5v3.2h-3.2"/></svg>
+      </button>
+    </div>
+  </header>
+  <!-- 즐겨찾기 도시 목록 -->
+  <nav class="favs" id="favs" aria-label="즐겨찾기 도시"></nav>
+  <!-- API 키 입력줄 -->
+  <section class="card keybar" aria-label="API 키">
+    <label for="keyInput">🔑 API 키</label>
+    <form id="keyForm" autocomplete="off">
+      <input id="keyInput" type="password" placeholder="OpenWeather API 키를 붙여 넣으세요" spellcheck="false">
+      <button type="button" id="keyShow" title="입력한 키 보이기/숨기기">보기</button>
+      <button type="submit" class="primary">저장</button>
+      <button type="button" id="keyClear">삭제</button>
+    </form>
+    <div class="state" id="keyState"></div>
+  </section>
+  <p class="notice" id="notice" aria-live="polite"></p>
+
+  <main id="main">
+    <section class="now">
+      <div class="card hero">
+        <div class="place" id="place"></div>
+        <div>
+          <div class="temp-row">
+            <div id="nowIcon"></div>
+            <div class="big-temp" id="nowTemp"></div>
+          </div>
+          <div class="desc" id="nowDesc"></div>
+          <div class="sub" id="nowSub"></div>
+        </div>
+        <div class="tip" id="tip"></div>
+      </div>
+
+      <div class="card details" id="details">
+        <h2>지금 날씨 자세히</h2>
+      </div>
+    </section>
+
+    <section class="card hourly">
+      <h2>3시간 간격 예보</h2>
+      <div class="hours" id="hours"></div>
+    </section>
+
+    <section class="card daily">
+      <h2>5일 예보</h2>
+      <div id="days"></div>
+    </section>
+
+    <section class="card preview" aria-label="하늘 색 미리보기">
+      <b>하늘 색 미리보기 (테스트용)</b>
+      <div id="previewBtns" style="display:contents"></div>
+    </section>
+
+    <p class="foot" id="foot"></p>
+  </main>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   1. 설정값
+   ═══════════════════════════════════════════════ */
+const API = "https://api.openweathermap.org";
+const DEFAULT_CITY = { name: "서울", country: "KR", lat: 37.5683, lon: 126.9778 };
+
+// 한글 도시 이름 → 영어 이름 (한글 검색이 안 될 때 대신 찾아볼 이름)
+const KO_CITY = {
+  "서울": "Seoul", "부산": "Busan", "대구": "Daegu", "인천": "Incheon", "광주": "Gwangju", "대전": "Daejeon",
+  "울산": "Ulsan", "세종": "Sejong", "수원": "Suwon", "성남": "Seongnam", "고양": "Goyang", "용인": "Yongin",
+  "창원": "Changwon", "청주": "Cheongju", "천안": "Cheonan", "전주": "Jeonju", "포항": "Pohang", "제주": "Jeju City",
+  "서귀포": "Seogwipo", "강릉": "Gangneung", "춘천": "Chuncheon", "원주": "Wonju", "속초": "Sokcho", "여수": "Yeosu",
+  "목포": "Mokpo", "순천": "Suncheon", "경주": "Gyeongju", "안동": "Andong", "진주": "Jinju", "김해": "Gimhae",
+  "통영": "Tongyeong", "거제": "Geoje", "군산": "Gunsan", "익산": "Iksan", "평택": "Pyeongtaek", "파주": "Paju",
+  "의정부": "Uijeongbu", "구미": "Gumi", "충주": "Chungju", "동해": "Donghae", "삼척": "Samcheok", "목동": "Seoul",
+  "도쿄": "Tokyo", "오사카": "Osaka", "후쿠오카": "Fukuoka", "베이징": "Beijing", "상하이": "Shanghai",
+  "타이베이": "Taipei", "홍콩": "Hong Kong", "방콕": "Bangkok", "다낭": "Da Nang", "하노이": "Hanoi",
+  "싱가포르": "Singapore", "뉴욕": "New York", "런던": "London", "파리": "Paris", "로마": "Rome",
+  "시드니": "Sydney", "로스앤젤레스": "Los Angeles", "엘에이": "Los Angeles", "하와이": "Honolulu", "호놀룰루": "Honolulu"
+};
+const KO_COUNTRY = { KR: "대한민국", JP: "일본", CN: "중국", TW: "대만", HK: "홍콩", US: "미국", GB: "영국", FR: "프랑스",
+  IT: "이탈리아", DE: "독일", ES: "스페인", TH: "태국", VN: "베트남", SG: "싱가포르", AU: "호주", CA: "캐나다", PH: "필리핀" };
+
+/* 키가 없을 때 보여줄 서울 예시 데이터 (화면용 모양 그대로) */
+const T = (d, h, m) => new Date(Date.UTC(2026, 9, d, h, m));
+const SAMPLE = {
+  sample: true, firstIsToday: true,
+  city: "서울", country: "대한민국", nowLocal: T(2, 7, 40),
+  lat: 37.5683, lon: 126.9778, countryCode: "KR",
+  current: { main: "Clouds", night: false, description: "구름 조금", temp: 15, feels_like: 14, humidity: 68,
+    pressure: 1018, wind_speed: "2.6", wind_deg: 315, visibility: 10000, sunrise: T(2, 6, 22), sunset: T(2, 18, 11) },
+  hourly: [
+    { time: "09:00", main: "Clouds", temp: 16, pop: 0 },
+    { time: "12:00", main: "Clear",  temp: 21, pop: 0 },
+    { time: "15:00", main: "Clear",  temp: 23, pop: 0 },
+    { time: "18:00", main: "Clouds", temp: 20, pop: 10 },
+    { time: "21:00", main: "Clouds", temp: 17, pop: 30, night: true },
+    { time: "00:00", main: "Rain",   temp: 15, pop: 60, night: true, nextDay: true },
+    { time: "03:00", main: "Rain",   temp: 14, pop: 70, night: true, nextDay: true },
+    { time: "06:00", main: "Clouds", temp: 13, pop: 40, nextDay: true }
+  ],
+  daily: [
+    { label: "오늘", date: "10/2", main: "Clouds", min: 13, max: 23, pop: 60 },
+    { label: "토",   date: "10/3", main: "Rain",   min: 12, max: 18, pop: 80 },
+    { label: "일",   date: "10/4", main: "Clouds", min: 10, max: 18, pop: 30 },
+    { label: "월",   date: "10/5", main: "Clear",  min: 9,  max: 20, pop: 0 },
+    { label: "화",   date: "10/6", main: "Clouds", min: 11, max: 21, pop: 10 }
+  ]
+};
+
+/* ═══════════════════════════════════════════════
+   2. 브라우저 저장 (키, 마지막으로 본 도시)
+   ═══════════════════════════════════════════════ */
+const memory = {};
+const store = {
+  get(k) { try { return localStorage.getItem(k) ?? memory[k] ?? null; } catch { return memory[k] ?? null; } },
+  set(k, v) { memory[k] = v; try { localStorage.setItem(k, v); } catch {} },
+  del(k) { delete memory[k]; try { localStorage.removeItem(k); } catch {} }
+};
+const getKey = () => store.get("owm_key");
+function getCity() {
+  try { return JSON.parse(store.get("owm_city")) || DEFAULT_CITY; } catch { return DEFAULT_CITY; }
+}
+
+/* ═══════════════════════════════════════════════
+   3. 아이콘
+   ═══════════════════════════════════════════════ */
+const SUN = `<circle cx="32" cy="32" r="11" fill="#FFD25A"/><g stroke="#FFD25A" stroke-width="3.5" stroke-linecap="round">
+  <path d="M32 9v6M32 49v6M9 32h6M49 32h6M15.7 15.7l4.2 4.2M44.1 44.1l4.2 4.2M15.7 48.3l4.2-4.2M44.1 19.9l4.2-4.2"/></g>`;
+const MOON = `<path d="M40 12a20 20 0 1 0 12 30A16 16 0 0 1 40 12z" fill="#F3E7B3"/>`;
+const CLOUD = (y = 0, c = "#F4F7FB") =>
+  `<path transform="translate(0 ${y})" d="M20 46h26a10 10 0 0 0 0-20 14 14 0 0 0-26.6-3.4A11.5 11.5 0 0 0 20 46z" fill="${c}"/>`;
+const DROPS = `<g stroke="#8FD0FF" stroke-width="3" stroke-linecap="round"><path d="M24 50l-3 7M34 50l-3 7M44 50l-3 7"/></g>`;
+const FLAKES = `<g fill="#FFFFFF"><circle cx="23" cy="54" r="2.6"/><circle cx="33" cy="58" r="2.6"/><circle cx="43" cy="54" r="2.6"/></g>`;
+const BOLT = `<path d="M34 44l-7 11h6l-3 8 10-13h-6l4-6z" fill="#FFD25A"/>`;
+const MIST = `<g stroke="#F4F7FB" stroke-width="3.5" stroke-linecap="round"><path d="M14 26h36M10 34h44M16 42h32"/></g>`;
+
+function icon(main, night) {
+  let body;
+  switch (main) {
+    case "Clear": body = night ? MOON : SUN; break;
+    case "Clouds": body = `<g transform="translate(8 -6) scale(.8)">${night ? MOON : SUN}</g>` + CLOUD(4); break;
+    case "Rain": case "Drizzle": body = CLOUD(-4, "#DCE5EF") + DROPS; break;
+    case "Thunderstorm": body = CLOUD(-6, "#B9C3D1") + BOLT; break;
+    case "Snow": body = CLOUD(-4) + FLAKES; break;
+    default: body = MIST;
+  }
+  return `<svg viewBox="0 0 64 64" aria-hidden="true">${body}</svg>`;
+}
+const MINI = {
+  humidity: `<path d="M8 2s5 5.5 5 9a5 5 0 0 1-10 0c0-3.5 5-9 5-9z" fill="none" stroke="currentColor" stroke-width="1.6"/>`,
+  wind: `<path d="M2 6h8a2.5 2.5 0 1 0-2.5-2.5M2 10h11a2.5 2.5 0 1 1-2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>`,
+  pressure: `<circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 8l3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>`,
+  visibility: `<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="8" r="2" fill="currentColor"/>`,
+  sunrise: `<path d="M2 12h12M4.5 12a3.5 3.5 0 0 1 7 0M8 2v4M5.5 4.5L8 2l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`,
+  sunset: `<path d="M2 12h12M4.5 12a3.5 3.5 0 0 1 7 0M8 2v4M5.5 3.5L8 6l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`
+};
+const mini = k => `<svg viewBox="0 0 16 16" aria-hidden="true">${MINI[k]}</svg>`;
+
+/* ═══════════════════════════════════════════════
+   4. 도우미 함수
+   ═══════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, "0");
+const r = n => Math.round(n);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// API의 시간(1970년부터 센 초)을 "그 도시의 현지 시각"으로 바꾸기
+const local = (unix, tz) => new Date((unix + tz) * 1000);           // 읽을 때 getUTC… 사용
+const dayKey = d => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+const ampm = d => `${d.getUTCHours() < 12 ? "오전" : "오후"} ${((d.getUTCHours() + 11) % 12) + 1}:${pad(d.getUTCMinutes())}`;
+const WD = ["일", "월", "화", "수", "목", "금", "토"];
+
+function windDir(deg) {
+  return ["북", "북동", "동", "남동", "남", "남서", "서", "북서"][Math.round(deg / 45) % 8] + "풍";
+}
+function normMain(main) {
+  if (["Clear", "Clouds", "Rain", "Drizzle", "Thunderstorm", "Snow"].includes(main)) return main;
+  return "Mist";   // 안개, 연무, 황사, 먼지 등
+}
+function skyKey(main, night) {
+  if (main === "Clear") return night ? "clear-night" : "clear";
+  if (main === "Clouds") return night ? "clouds-night" : "clouds";
+  if (main === "Rain" || main === "Drizzle") return "rain";
+  if (main === "Thunderstorm") return "thunder";
+  if (main === "Snow") return "snow";
+  return "mist";
+}
+const WET = ["Rain", "Drizzle", "Thunderstorm", "Snow"];
+
+/* ═══════════════════════════════════════════════
+   5. API 부르기
+   ═══════════════════════════════════════════════ */
+class ApiError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
+
+async function call(path, params) {
+  const url = `${API}${path}?` + new URLSearchParams({ ...params, appid: getKey() });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10000);
+  let res;
+  try { res = await fetch(url, { signal: ctrl.signal }); }
+  catch (e) {
+    throw new ApiError(0, e.name === "AbortError"
+      ? "날씨 서버가 10초 넘게 응답하지 않아요. 잠시 뒤 새로고침해 보세요."
+      : "인터넷에 연결할 수 없어요. 와이파이나 인터넷 연결을 확인해 주세요.");
+  } finally { clearTimeout(timer); }
+  if (res.ok) {
+    try { return await res.json(); }
+    catch { throw new ApiError(res.status, "날씨 서버의 답을 읽지 못했어요. 잠시 뒤 다시 해 보세요."); }
+  }
+  const msg = {
+    400: "요청 내용이 올바르지 않아요. 도시 이름을 다시 확인해 주세요.",
+    401: "API 키가 맞지 않아요. 키를 다시 복사해 붙여 넣어 보세요. 새로 만든 키라면 작동까지 1~2시간 걸릴 수 있어요.",
+    404: "도시를 찾지 못했어요. 다른 이름으로 검색해 보세요.",
+    429: "짧은 시간에 너무 많이 요청했어요. 1분쯤 뒤에 다시 해 보세요."
+  }[res.status] || (res.status >= 500
+      ? `날씨 서버에 일시적인 문제가 있어요. (오류 ${res.status}) 잠시 뒤 다시 해 보세요.`
+      : `날씨를 불러오지 못했어요. (오류 ${res.status})`);
+  throw new ApiError(res.status, msg);
+}
+
+async function loadWeather(city) {
+  const p = { lat: city.lat, lon: city.lon, units: "metric", lang: "kr" };
+  const [now, fc] = await Promise.all([call("/data/2.5/weather", p), call("/data/2.5/forecast", p)]);
+  return { now, fc };
+}
+
+/* ═══════════════════════════════════════════════
+   6. API 응답 → 화면용 데이터로 정리
+   ═══════════════════════════════════════════════ */
+function shape(city, { now, fc }) {
+  const tz = (fc.city && fc.city.timezone != null) ? fc.city.timezone : now.timezone;
+  const nowLocal = local(now.dt, tz);
+  const w = now.weather[0];
+
+  // 3시간 간격 8칸
+  const hourly = fc.list.slice(0, 8).map(it => {
+    const d = local(it.dt, tz);
+    return {
+      time: `${pad(d.getUTCHours())}:00`,
+      nextDay: dayKey(d) !== dayKey(nowLocal),
+      main: normMain(it.weather[0].main),
+      night: it.sys && it.sys.pod === "n",
+      temp: r(it.main.temp),
+      pop: r((it.pop || 0) * 100)
+    };
+  });
+
+  // 5일 예보: 아래 groupByLocalDate()에서 날짜별로 묶음
+  const { daily, todayThin } = groupByLocalDate(fc, tz, nowLocal);
+
+  return {
+    firstIsToday: !todayThin,
+    lat: city.lat, lon: city.lon, state: city.state || "", countryCode: city.country || now.sys.country,
+    city: city.name,
+    country: KO_COUNTRY[now.sys.country] || now.sys.country || "",
+    nowLocal,
+    current: {
+      main: normMain(w.main),
+      night: (w.icon || "").endsWith("n"),
+      description: w.description,
+      temp: r(now.main.temp), feels_like: r(now.main.feels_like),
+      humidity: now.main.humidity, pressure: now.main.pressure,
+      wind_speed: (now.wind.speed ?? 0).toFixed(1), wind_deg: now.wind.deg ?? 0,
+      visibility: now.visibility ?? null,
+      sunrise: local(now.sys.sunrise, tz), sunset: local(now.sys.sunset, tz)
+    },
+    hourly, daily
+  };
+}
+
+/* ───────────────────────────────────────────────
+   5일 예보 만들기: 3시간 예보 40개 → 날짜별 한 줄
+   ① 각 예보의 시각(dt, 세계 표준시 기준 초)에 그 도시의 시차(timezone 초)를 더해
+      "현지 시각"으로 바꾼 뒤, 그 날짜(연-월-일)를 이름표로 붙인다.
+   ② 같은 이름표끼리 한 바구니에 담는다. (서울이면 0시~21시, 하루 최대 8개)
+   ③ 바구니마다
+      · 최저 기온 = 바구니 안 temp_min 중 가장 낮은 값
+      · 최고 기온 = 바구니 안 temp_max 중 가장 높은 값
+      · 강수확률 = 바구니 안 pop(0~1) 중 가장 큰 값 × 100
+      · 대표 아이콘 = 현지 정오(12:00)에 가장 가까운 예보의 날씨
+   ④ 날짜순으로 정렬해 앞에서 5일만 쓴다.
+      단, 밤늦게 열어 오늘 남은 예보가 1개 이하면 비교가 무의미해서 오늘은 빼고 내일부터 보여준다.
+   ─────────────────────────────────────────────── */
+function groupByLocalDate(fc, tz, nowLocal) {
+  const baskets = new Map();                                   // "2026-9-3" → [예보, 예보, …]
+  for (const it of fc.list) {
+    const d = local(it.dt, tz);                                // ① 현지 시각
+    const key = dayKey(d);
+    if (!baskets.has(key)) baskets.set(key, []);
+    baskets.get(key).push({ it, minutes: d.getUTCHours() * 60 + d.getUTCMinutes() });   // ②
+  }
+
+  const dayOrder = k => { const [y, m, d] = k.split("-").map(Number); return Date.UTC(y, m, d); };
+  const todayKey = dayKey(nowLocal);
+  const tomorrowKey = dayKey(new Date(dayOrder(todayKey) + 86400000));
+  const todayThin = (baskets.get(todayKey) || []).length <= 1;
+
+  const keys = [...baskets.keys()]
+    .filter(k => !(todayThin && k === todayKey))
+    .sort((a, b) => dayOrder(a) - dayOrder(b))
+    .slice(0, 5);                                              // ④
+
+  const daily = keys.map(k => {                                // ③
+    const rows = baskets.get(k);
+    const min = Math.min(...rows.map(x => x.it.main.temp_min));
+    const max = Math.max(...rows.map(x => x.it.main.temp_max));
+    const pop = Math.max(...rows.map(x => x.it.pop || 0));
+    const noon = rows.reduce((best, x) =>
+      Math.abs(x.minutes - 720) < Math.abs(best.minutes - 720) ? x : best);   // 720분 = 12:00
+    const date = new Date(dayOrder(k));
+    return {
+      label: k === todayKey ? "오늘" : k === tomorrowKey ? "내일" : WD[date.getUTCDay()],
+      date: `${date.getUTCMonth() + 1}/${date.getUTCDate()}`,
+      main: normMain(noon.it.weather[0].main),
+      noonTime: `${pad(Math.floor(noon.minutes / 60))}:00`,
+      min: r(min), max: r(max), pop: r(pop * 100)
+    };
+  });
+  return { daily, todayThin };
+}
+
+function makeTip(d) {
+  const tips = [];
+  const rain = d.hourly.find(h => h.pop >= 50 && WET.includes(h.main)) || d.hourly.find(h => h.pop >= 50);
+  if (rain) {
+    const what = rain.main === "Snow" ? "눈" : "비";
+    tips.push(`${rain.nextDay ? "내일 " : ""}${rain.time}쯤 ${what} 소식이 있어요(${rain.pop}%). 우산을 챙기세요.`);
+  }
+  const gap = d.daily[0].max - d.daily[0].min;
+  if (gap >= 10) tips.push(`${d.firstIsToday ? "" : "내일은 "}일교차가 ${gap}도로 커요. 얇은 겉옷을 챙기면 좋아요.`);
+  if (d.daily[0].max >= 30) tips.push("낮 기온이 30도를 넘어요. 물을 자주 마시세요.");
+  if (d.daily[0].min <= 0) tips.push("영하로 내려가요. 따뜻하게 입으세요.");
+  return tips.length ? "☂︎ " + tips.join(" ") : "외출하기 좋은 날씨예요.";
+}
+
+/* ═══════════════════════════════════════════════
+   7. 화면 그리기
+   ═══════════════════════════════════════════════ */
+let DATA = null;
+
+function render(d, override) {
+  const c = d.current;
+  const main = override ? override.main : c.main;
+  const night = override ? override.night : c.night;
+
+  document.documentElement.dataset.sky = skyKey(main, night);
+
+  const n = d.nowLocal;
+  $("today").textContent = `${n.getUTCMonth() + 1}월 ${n.getUTCDate()}일 ${WD[n.getUTCDay()]}요일 · ${ampm(n)} ${d.sample ? "기준" : "업데이트"}`;
+  const fav = isFav(d);
+  $("place").innerHTML = `<div class="place-row">${esc(d.city)}${d.sample ? '<b class="badge">예시</b>' : ""}
+      <button type="button" class="fav-toggle ${fav ? "on" : ""}" id="favToggle" aria-pressed="${fav}">
+        ${fav ? "★ 즐겨찾기됨" : "☆ 즐겨찾기"}</button></div><span>${esc(d.country)}</span>`;
+  renderFavs();
+  $("foot").textContent = d.sample
+    ? "지금은 예시 데이터예요. 위쪽에 API 키를 저장하면 실제 날씨로 바뀌어요."
+    : "날씨 정보: OpenWeather";
+  $("nowIcon").innerHTML = icon(main, night);
+  $("nowTemp").innerHTML = `${c.temp}<sup>°C</sup>`;
+  $("nowDesc").textContent = override ? override.label : c.description;
+  $("nowSub").textContent = `체감 ${c.feels_like}° · ${d.firstIsToday ? "" : "내일 "}최저 ${d.daily[0].min}° / 최고 ${d.daily[0].max}°`;
+  $("tip").textContent = makeTip(d);
+
+  const items = [
+    ["humidity", "습도", `${c.humidity}<small>%</small>`],
+    ["wind", "바람", `${c.wind_speed}<small>m/s ${windDir(c.wind_deg)}</small>`],
+    ["pressure", "기압", `${c.pressure}<small>hPa</small>`],
+    ["visibility", "가시거리", c.visibility == null ? "-" : `${(c.visibility / 1000).toFixed(c.visibility < 10000 ? 1 : 0)}<small>km</small>`],
+    ["sunrise", "일출", ampm(c.sunrise)],
+    ["sunset", "일몰", ampm(c.sunset)]
+  ];
+  $("details").innerHTML = `<h2>지금 날씨 자세히</h2>` + items.map(([k, label, v]) =>
+    `<div class="d"><div class="k">${mini(k)}${label}</div><div class="v">${v}</div></div>`).join("");
+
+  $("hours").innerHTML = d.hourly.map(h => `
+    <div class="h ${h.pop >= 50 ? "wet" : ""}">
+      <div class="t">${h.time}${h.nextDay ? "<small>내일</small>" : "<small>&nbsp;</small>"}</div>
+      ${icon(h.main, h.night)}
+      <div class="c">${h.temp}°</div>
+      <div class="p">${h.pop > 0 ? "☂︎ " + h.pop + "%" : ""}</div>
+    </div>`).join("");
+
+  const lo = Math.min(...d.daily.map(x => x.min)), hi = Math.max(...d.daily.map(x => x.max));
+  const pos = v => hi === lo ? 50 : ((v - lo) / (hi - lo)) * 100;
+  $("days").innerHTML = d.daily.map(x => `
+    <div class="day">
+      <div class="n">${x.label}<small>${x.date}</small></div>
+      ${icon(x.main, false)}
+      <div class="pop">${x.pop > 0 ? "☂︎ " + x.pop + "%" : ""}</div>
+      <div class="bar" title="${x.label} 최저 ${x.min}° ~ 최고 ${x.max}°${x.noonTime ? ` · 아이콘은 ${x.noonTime} 예보 기준` : ""}"><i style="left:${pos(x.min)}%;right:${100 - pos(x.max)}%"></i></div>
+      <div class="lo">${x.min}°</div>
+      <div class="hi">${x.max}°</div>
+    </div>`).join("");
+}
+
+function notice(text, isError) {
+  $("notice").textContent = text || "";
+  $("notice").classList.toggle("error", !!isError);
+}
+
+async function show(city) {
+  if (!getKey()) { showSample(); return false; }
+  $("main").classList.add("loading");
+  $("refreshBtn").classList.add("spin");
+  notice("날씨를 불러오는 중…");
+  try {
+    const raw = await loadWeather(city);
+    DATA = shape(city, raw);
+    store.set("owm_city", JSON.stringify(city));
+    resetPreview();
+    render(DATA);
+    notice("");
+    keyState(true);
+    return true;
+  } catch (e) {
+    // 실패하면 이유를 알려주고, 화면은 직전 날씨(없으면 예시)를 그대로 둠
+    notice("불러오기 실패: " + e.message, true);
+    if (!DATA) { DATA = SAMPLE; render(SAMPLE); }
+    if (e.status === 401) keyState(false);
+    return false;
+  } finally {
+    $("main").classList.remove("loading");
+    $("refreshBtn").classList.remove("spin");
+  }
+}
+
+function showSample() {
+  DATA = SAMPLE;
+  resetPreview();
+  render(SAMPLE);
+  keyState();
+}
+
+/* ═══════════════════════════════════════════════
+   8. API 키 입력줄 (저장 · 보기 · 삭제)
+   ═══════════════════════════════════════════════ */
+function keyState(ok) {
+  const k = getKey();
+  $("keyInput").placeholder = k ? `저장된 키: ••••••••${k.slice(-4)}  (바꾸려면 새 키를 붙여 넣으세요)` : "OpenWeather API 키를 붙여 넣으세요";
+  $("keyClear").hidden = !k;
+  $("keyState").innerHTML = !k
+    ? `키가 없어서 예시 화면을 보여드리고 있어요. 키는 <a href="https://home.openweathermap.org/api_keys" target="_blank" rel="noopener">OpenWeather → My API keys</a>에서 복사할 수 있어요.`
+    : ok === false ? "⚠️ 저장된 키로 날씨를 받지 못했어요. 키를 확인해 주세요."
+    : "✓ 키가 이 브라우저에 저장되어 있어요.";
+}
+$("keyForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const key = $("keyInput").value.trim().replace(/\s+/g, "");
+  if (!key) return notice("API 키를 붙여 넣은 뒤 저장을 눌러 주세요.", true);
+  if (!/^[0-9a-f]{32}$/i.test(key))
+    return notice("키 모양이 맞지 않아요. OpenWeather 키는 영어(a~f)와 숫자로 된 32자리예요. 빠지거나 더 들어간 글자가 없는지 확인해 주세요.", true);
+  store.set("owm_key", key);
+  $("keyInput").value = "";
+  $("keyInput").type = "password"; $("keyShow").textContent = "보기";
+  DATA = null;
+  if (await show(getCity())) notice("키를 저장했어요. 이제 실제 날씨를 보여드려요.");
+});
+$("keyShow").addEventListener("click", () => {
+  const hide = $("keyInput").type === "text";
+  $("keyInput").type = hide ? "password" : "text";
+  $("keyShow").textContent = hide ? "보기" : "숨기기";
+});
+$("keyClear").addEventListener("click", () => {
+  store.del("owm_key");
+  notice("저장된 키를 지웠어요. 예시 화면으로 돌아왔어요.");
+  showSample();
+});
+$("refreshBtn").addEventListener("click", () => getKey() ? show(getCity()) : notice("API 키를 저장하면 실제 날씨를 불러올 수 있어요."));
+
+/* ═══════════════════════════════════════════════
+   9. 도시 검색 (한글 → 후보 목록 → 선택)
+   ═══════════════════════════════════════════════ */
+function koName(place, typed) {
+  return (place.local_names && place.local_names.ko) || (KO_CITY[typed] ? typed : place.name);
+}
+async function geocode(q) {
+  let list = await call("/geo/1.0/direct", { q, limit: 5 });
+  const en = KO_CITY[q.replace(/\s+/g, "").replace(/(시|군)$/, "")] || KO_CITY[q];
+  if ((!list.length || !list.some(p => p.country === "KR")) && en) {
+    const more = await call("/geo/1.0/direct", { q: en, limit: 5 });
+    list = list.concat(more);
+  }
+  // 같은 곳 중복 제거
+  const seen = new Set();
+  return list.filter(p => {
+    const k = `${p.lat.toFixed(2)},${p.lon.toFixed(2)}`;
+    if (seen.has(k)) return false; seen.add(k); return true;
+  }).slice(0, 5);
+}
+function closeResults() { $("results").hidden = true; $("results").innerHTML = ""; }
+
+$("searchForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const q = $("q").value.trim();
+  closeResults();
+  if (!q) return notice("도시 이름을 입력해 주세요.");
+  if (!getKey()) return notice("도시 검색은 API 키가 있어야 해요. 위쪽 칸에 키를 붙여 넣고 저장해 주세요.", true);
+  notice("도시를 찾는 중…");
+  let list;
+  try { list = await geocode(q); }
+  catch (err) { return notice("검색 실패: " + err.message, true); }
+  if (!list.length) return notice(`"${q}"을(를) 찾지 못했어요. 다른 이름으로 검색해 보세요. (예: 부산, Busan)`, true);
+  notice("");
+
+  const cities = list.map(p => ({
+    name: koName(p, q), country: p.country, lat: +p.lat.toFixed(4), lon: +p.lon.toFixed(4),
+    state: p.state || "",
+    detail: [p.state, KO_COUNTRY[p.country] || p.country].filter(Boolean).join(", ")
+  }));
+  if (cities.length === 1) { $("q").value = ""; return show(cities[0]); }
+
+  $("results").innerHTML = cities.map((c, i) =>
+    `<li><button type="button" data-i="${i}">${esc(c.name)}<small>${esc(c.detail)}</small></button></li>`).join("");
+  $("results").hidden = false;
+  $("results").onclick = ev => {
+    const b = ev.target.closest("button"); if (!b) return;
+    const c = cities[+b.dataset.i];
+    closeResults(); $("q").value = "";
+    show({ name: c.name, country: c.country, state: c.state, lat: c.lat, lon: c.lon });
+  };
+});
+document.addEventListener("click", e => { if (!e.target.closest(".search-box")) closeResults(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeResults(); });
+
+/* ═══════════════════════════════════════════════
+   9-2. 즐겨찾는 도시
+   · 도시는 이름이 아니라 위도·경도로 구별해서 저장한다.
+     (이름은 버튼에 보여줄 글자일 뿐. 같은 이름의 다른 도시와 헷갈리지 않게)
+   · 좌표를 소수점 둘째 자리(약 1km)까지 맞춰 보고 같으면 "같은 도시"로 본다.
+   · 목록은 브라우저 저장소(owm_favs)에 JSON 글자로 보관 → 앱을 다시 열어도 남는다.
+   ═══════════════════════════════════════════════ */
+const placeId = c => `${(+c.lat).toFixed(2)},${(+c.lon).toFixed(2)}`;
+function getFavs() {
+  try {
+    const list = JSON.parse(store.get("owm_favs")) || [];
+    return list.filter(c => isFinite(c.lat) && isFinite(c.lon));
+  } catch { return []; }
+}
+const saveFavs = list => store.set("owm_favs", JSON.stringify(list));
+const isFav = c => getFavs().some(f => placeId(f) === placeId(c));
+
+function toggleFav() {
+  if (!DATA) return;
+  const here = { name: DATA.city, country: DATA.countryCode || "", state: DATA.state || "", lat: +DATA.lat, lon: +DATA.lon };
+  let list = getFavs();
+  if (list.some(f => placeId(f) === placeId(here))) {
+    list = list.filter(f => placeId(f) !== placeId(here));
+    notice(`${here.name}을(를) 즐겨찾기에서 뺐어요.`);
+  } else {
+    list.push(here);
+    notice(`${here.name}을(를) 즐겨찾기에 추가했어요.`);
+  }
+  saveFavs(list);
+  updateFavUI();
+}
+
+// 화면 전체를 다시 그리지 않고 ☆/★ 버튼과 목록만 새로 고치기
+function updateFavUI() {
+  const t = $("favToggle");
+  if (t && DATA) {
+    const on = isFav(DATA);
+    t.classList.toggle("on", on);
+    t.setAttribute("aria-pressed", on);
+    t.textContent = on ? "★ 즐겨찾기됨" : "☆ 즐겨찾기";
+  }
+  renderFavs();
+}
+
+function renderFavs() {
+  const list = getFavs();
+  const cur = DATA ? placeId(DATA) : "";
+  const sameName = n => list.filter(c => c.name === n).length > 1;
+  const label = c => sameName(c.name) && c.state ? `${c.name} (${c.state})` : c.name;
+  $("favs").innerHTML = `<span class="label">★ 즐겨찾기</span>` + (list.length
+    ? list.map((c, i) => `
+      <span class="fav ${placeId(c) === cur ? "current" : ""}">
+        <button type="button" class="go" data-i="${i}" title="${esc(label(c))} 날씨 보기 (위도 ${(+c.lat).toFixed(2)}, 경도 ${(+c.lon).toFixed(2)})">${esc(label(c))}</button>
+        <button type="button" class="x" data-i="${i}" title="${esc(c.name)} 즐겨찾기에서 빼기" aria-label="${esc(c.name)} 즐겨찾기에서 빼기">×</button>
+      </span>`).join("")
+    : `<span class="empty">도시 이름 옆 ☆ 버튼을 누르면 여기에 추가돼요.</span>`);
+}
+
+$("favs").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const list = getFavs();
+  const c = list[+b.dataset.i]; if (!c) return;
+  if (b.classList.contains("x")) {
+    saveFavs(list.filter((_, i) => i !== +b.dataset.i));
+    notice(`${c.name}을(를) 즐겨찾기에서 뺐어요.`);
+    updateFavUI();
+    return;
+  }
+  if (!getKey()) return notice("즐겨찾기 도시의 날씨를 보려면 위쪽 칸에 API 키를 먼저 저장해 주세요.", true);
+  show({ name: c.name, country: c.country, state: c.state || "", lat: c.lat, lon: c.lon });
+});
+$("place").addEventListener("click", e => { if (e.target.closest("#favToggle")) toggleFav(); });
+
+/* ═══════════════════════════════════════════════
+   10. 하늘 색 미리보기 버튼 (테스트용, 나중에 지워도 됨)
+   ═══════════════════════════════════════════════ */
+const PREVIEWS = [
+  { label: "원래대로", reset: true },
+  { label: "맑음", main: "Clear", night: false },
+  { label: "구름", main: "Clouds", night: false },
+  { label: "비", main: "Rain", night: false },
+  { label: "뇌우", main: "Thunderstorm", night: false },
+  { label: "눈", main: "Snow", night: false },
+  { label: "안개", main: "Mist", night: false },
+  { label: "맑은 밤", main: "Clear", night: true },
+  { label: "흐린 밤", main: "Clouds", night: true }
+];
+const box = $("previewBtns");
+box.innerHTML = PREVIEWS.map((p, i) =>
+  `<button type="button" data-i="${i}" aria-pressed="${i === 0}">${p.label}</button>`).join("");
+function resetPreview() { box.querySelectorAll("button").forEach((x, i) => x.setAttribute("aria-pressed", i === 0)); }
+box.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b || !DATA) return;
+  const p = PREVIEWS[+b.dataset.i];
+  box.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  render(DATA, p.reset ? null : p);
+});
+
+/* ═══════════════════════════════════════════════
+   11. 시작
+   ═══════════════════════════════════════════════ */
+if (getKey()) { keyState(); show(getCity()); }
+else showSample();
+
+// 페이지를 켜 둔 채로 있으면 30분마다 새로 받아오기
+setInterval(() => { if (getKey() && !document.hidden) show(getCity()); }, 30 * 60 * 1000);
+</script>
+</body>
+</html>
