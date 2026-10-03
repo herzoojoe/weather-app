@@ -99,6 +99,24 @@
   .d .v { font-size: 20px; font-weight: 600; margin-top: 6px; font-variant-numeric: tabular-nums; }
   .d .v small { font-size: 13px; font-weight: 500; color: var(--text-soft); margin-left: 3px; }
 
+  /* ── 내일 날씨 미리보기 ── */
+  .tomorrow { margin-top: 16px; padding: 20px; display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; align-items: center; }
+  .tomorrow h2 { grid-column: 1 / -1; margin-bottom: 0; }
+  .tm-main { display: flex; align-items: center; gap: 12px; }
+  .tm-main svg { width: 64px; height: 64px; flex: none; }
+  .tm-temp { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .tm-temp small { font-size: 15px; font-weight: 500; color: var(--text-soft); margin: 0 4px; }
+  .tm-desc { font-size: 15px; font-weight: 600; margin-top: 2px; }
+  .tm-desc span { font-weight: 500; color: var(--text-soft); }
+  .tm-cmp { font-size: 13px; color: var(--text-soft); margin-top: 4px; }
+  .tm-cmp b { color: #ffe6a3; font-weight: 600; }
+  .tm-cmp b.cold { color: #bfe3ff; }
+  .tm-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .tm-slots .h { padding: 10px 4px; }
+  .tm-slots .h svg { width: 32px; height: 32px; margin: 4px auto; }
+  .tomorrow .tip { grid-column: 1 / -1; }
+  .tomorrow[hidden] { display: none; }
+
   /* ── 아래: 3시간 예보 ── */
   .hourly { margin-top: 16px; padding: 20px; }
   .hours { display: grid; grid-template-columns: repeat(8, minmax(72px, 1fr)); gap: 8px; overflow-x: auto;
@@ -144,6 +162,7 @@
     .temp-row svg { width: 80px; height: 80px; }
     .details { grid-template-columns: repeat(2, 1fr); padding: 16px; }
     .hourly, .daily { padding: 16px; }
+    .tomorrow { grid-template-columns: 1fr; padding: 16px; }
     .hours { grid-template-columns: repeat(4, 1fr); overflow: visible; }
     .day { grid-template-columns: 40px 28px 48px 1fr 30px 30px; gap: 6px; }
     .day .pop { font-size: 12px; white-space: nowrap; }
@@ -252,6 +271,8 @@
       </div>
     </section>
 
+    <section class="card tomorrow" id="tomorrow" aria-label="내일 날씨 미리보기"></section>
+
     <section class="card hourly">
       <h2>3시간 간격 예보</h2>
       <div class="hours" id="hours"></div>
@@ -319,7 +340,15 @@ const SAMPLE = {
     { label: "일",   date: "10/4", main: "Clouds", min: 10, max: 18, pop: 30 },
     { label: "월",   date: "10/5", main: "Clear",  min: 9,  max: 20, pop: 0 },
     { label: "화",   date: "10/6", main: "Clouds", min: 11, max: 21, pop: 10 }
-  ]
+  ],
+  tomorrow: {
+    date: "10/3", weekday: "토", main: "Rain", description: "비", min: 12, max: 18, pop: 80,
+    slots: [
+      { label: "아침", time: "09:00", main: "Rain",   temp: 13, pop: 70 },
+      { label: "낮",   time: "15:00", main: "Clouds", temp: 17, pop: 40 },
+      { label: "저녁", time: "21:00", main: "Clouds", temp: 14, pop: 20, night: true }
+    ]
+  }
 };
 
 /* ═══════════════════════════════════════════════
@@ -479,7 +508,42 @@ function shape(city, { now, fc }) {
       visibility: now.visibility ?? null,
       sunrise: local(now.sys.sunrise, tz), sunset: local(now.sys.sunset, tz)
     },
-    hourly, daily
+    hourly, daily,
+    tomorrow: makeTomorrow(fc, tz, nowLocal)
+  };
+}
+
+/* ───────────────────────────────────────────────
+   내일 날씨 미리보기 만들기
+   ① 3시간 예보 40개 중 "현지 날짜가 내일"인 것만 고른다. (보통 00시~21시, 8개)
+   ② 최저·최고 기온, 가장 높은 강수확률을 구한다. (5일 예보와 같은 방법)
+   ③ 대표 날씨 = 내일 정오(12:00)에 가장 가까운 예보
+   ④ 아침(09시)·낮(15시)·저녁(21시)에 가장 가까운 예보를 하나씩 골라 시간대별로 보여준다.
+   ─────────────────────────────────────────────── */
+function makeTomorrow(fc, tz, nowLocal) {
+  const todayStart = Date.UTC(nowLocal.getUTCFullYear(), nowLocal.getUTCMonth(), nowLocal.getUTCDate());
+  const tKey = dayKey(new Date(todayStart + 86400000));
+  const rows = fc.list.map(it => ({ it, d: local(it.dt, tz) }))
+    .filter(x => dayKey(x.d) === tKey)                                          // ①
+    .map(x => ({ ...x, minutes: x.d.getUTCHours() * 60 + x.d.getUTCMinutes() }));
+  if (!rows.length) return null;
+  const near = target => rows.reduce((best, x) =>
+    Math.abs(x.minutes - target) < Math.abs(best.minutes - target) ? x : best);
+  const noon = near(720);                                                       // ③
+  const date = rows[0].d;
+  const slot = (label, target) => {                                             // ④
+    const x = near(target);
+    return { label, time: `${pad(x.d.getUTCHours())}:${pad(x.d.getUTCMinutes())}`,
+      main: normMain(x.it.weather[0].main), night: x.it.sys && x.it.sys.pod === "n",
+      temp: r(x.it.main.temp), pop: r((x.it.pop || 0) * 100) };
+  };
+  return {
+    date: `${date.getUTCMonth() + 1}/${date.getUTCDate()}`, weekday: WD[date.getUTCDay()],
+    main: normMain(noon.it.weather[0].main), description: noon.it.weather[0].description,
+    min: r(Math.min(...rows.map(x => x.it.main.temp_min))),                     // ②
+    max: r(Math.max(...rows.map(x => x.it.main.temp_max))),
+    pop: r(Math.max(...rows.map(x => x.it.pop || 0)) * 100),
+    slots: [slot("아침", 540), slot("낮", 900), slot("저녁", 1260)]
   };
 }
 
@@ -548,6 +612,54 @@ function makeTip(d) {
   return tips.length ? "☂︎ " + tips.join(" ") : "외출하기 좋은 날씨예요.";
 }
 
+// 내일 준비물 한 줄 안내
+function makeTomorrowTip(t) {
+  const tips = [];
+  const rainy = t.slots.filter(s => s.pop >= 50);
+  if (rainy.length) {
+    const what = rainy.some(s => s.main === "Snow") ? "눈" : "비";
+    tips.push(`내일 ${rainy.map(s => s.label).join("·")}에 ${what} 소식이 있어요. 우산을 챙기세요.`);
+  } else if (t.pop >= 50) tips.push(`내일 ${t.pop}% 확률로 비 소식이 있어요. 작은 우산이 있으면 좋아요.`);
+  if (t.max - t.min >= 10) tips.push(`일교차가 ${t.max - t.min}도로 커요. 얇은 겉옷을 챙기세요.`);
+  if (t.max >= 30) tips.push("낮 기온이 30도를 넘어요. 물을 자주 마시세요.");
+  if (t.min <= 0) tips.push("영하로 내려가요. 따뜻하게 입으세요.");
+  return tips.length ? "🎒 " + tips.join(" ") : "🎒 내일은 외출하기 좋은 날씨예요.";
+}
+
+function renderTomorrow(d) {
+  const t = d.tomorrow;
+  $("tomorrow").hidden = !t;
+  if (!t) return;
+  // 오늘 최고 기온과 비교 (밤늦게 열어 오늘 예보가 없으면 비교 문구는 생략)
+  const today = d.firstIsToday ? d.daily[0] : null;
+  let cmp = "";
+  if (today) {
+    const diff = t.max - today.max;
+    cmp = Math.abs(diff) <= 1 ? "낮 기온이 오늘과 <b>비슷해요</b>"
+      : diff > 0 ? `낮 기온이 오늘보다 <b>${diff}° 높아요</b>`
+      : `낮 기온이 오늘보다 <b class="cold">${-diff}° 낮아요</b>`;
+  }
+  $("tomorrow").innerHTML = `
+    <h2>내일 날씨 미리보기 · ${t.date} ${t.weekday}요일</h2>
+    <div class="tm-main">
+      ${icon(t.main, false)}
+      <div>
+        <div class="tm-temp">${t.min}°<small>/</small>${t.max}°</div>
+        <div class="tm-desc">${esc(t.description)}${t.pop > 0 ? ` <span>· ☂︎ ${t.pop}%</span>` : ""}</div>
+        ${cmp ? `<div class="tm-cmp">${cmp}</div>` : ""}
+      </div>
+    </div>
+    <div class="tm-slots">${t.slots.map(s => `
+      <div class="h ${s.pop >= 50 ? "wet" : ""}">
+        <div class="t">${s.label}<small>${s.time}</small></div>
+        ${icon(s.main, s.night)}
+        <div class="c">${s.temp}°</div>
+        <div class="p">${s.pop > 0 ? "☂︎ " + s.pop + "%" : ""}</div>
+      </div>`).join("")}
+    </div>
+    <div class="tip">${makeTomorrowTip(t)}</div>`;
+}
+
 /* ═══════════════════════════════════════════════
    7. 화면 그리기
    ═══════════════════════════════════════════════ */
@@ -575,6 +687,7 @@ function render(d, override) {
   $("nowDesc").textContent = override ? override.label : c.description;
   $("nowSub").textContent = `체감 ${c.feels_like}° · ${d.firstIsToday ? "" : "내일 "}최저 ${d.daily[0].min}° / 최고 ${d.daily[0].max}°`;
   $("tip").textContent = makeTip(d);
+  renderTomorrow(d);
 
   const items = [
     ["humidity", "습도", `${c.humidity}<small>%</small>`],
