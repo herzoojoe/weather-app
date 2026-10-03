@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>아침 날씨</title>
+<!-- 앱으로 설치하기 위한 정보 (앱 이름·아이콘·상단 색) -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1d6cc2">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="아침 날씨">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
   :root {
@@ -44,6 +53,10 @@
   /* ── 상단: 검색창 ── */
   .top { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
   .brand { font-weight: 700; font-size: 18px; letter-spacing: -0.02em; }
+  .brand-row { display: flex; align-items: center; gap: 10px; }
+  .install-btn { border: 0; background: rgba(255,255,255,.9); color: #18324f; font: inherit; font-size: 13px; font-weight: 700;
+    padding: 7px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+  .install-btn[hidden] { display: none; }
   .brand small { display: block; font-weight: 500; font-size: 13px; color: var(--text-soft); margin-top: 2px; }
   .search { flex: 1 1 300px; max-width: 420px; display: flex; background: var(--card); border: 1px solid var(--card-line);
     border-radius: 999px; overflow: hidden; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
@@ -258,7 +271,10 @@
 <div class="wrap">
 
   <header class="top">
-    <div class="brand">아침 날씨<small id="today"></small></div>
+    <div class="brand-row">
+      <div class="brand">아침 날씨<small id="today"></small></div>
+      <button type="button" class="install-btn" id="installBtn" hidden>📲 앱으로 설치</button>
+    </div>
     <div class="top-actions">
       <div class="search-box">
         <form class="search" id="searchForm" role="search" autocomplete="off">
@@ -763,6 +779,9 @@ function render(d, override) {
   const night = override ? override.night : c.night;
 
   document.documentElement.dataset.sky = skyKey(main, night);
+  // 앱으로 열었을 때 맨 위 상태 표시줄 색도 하늘 색에 맞춘다
+  const top = getComputedStyle(document.documentElement).getPropertyValue("--sky-top").trim();
+  if (top) document.querySelector('meta[name="theme-color"]').content = top;
 
   const n = d.nowLocal;
   $("today").textContent = `${n.getUTCMonth() + 1}월 ${n.getUTCDate()}일 ${WD[n.getUTCDay()]}요일 · ${ampm(n)} ${d.sample ? "기준" : "업데이트"}`;
@@ -1040,6 +1059,31 @@ box.addEventListener("click", e => {
   box.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
   render(DATA, p.reset ? null : p);
 });
+
+/* ═══════════════════════════════════════════════
+   10-2. 앱으로 설치 (PWA)
+   · sw.js(서비스 워커)를 등록해 두면 인터넷이 끊겨도 앱 화면이 열린다.
+   · 크롬이 "설치할 수 있어요" 신호(beforeinstallprompt)를 보내면 그때만 설치 버튼을 보여준다.
+     이미 설치했거나 설치가 안 되는 브라우저에서는 버튼이 숨어 있다.
+   ═══════════════════════════════════════════════ */
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
+}
+let installEvent = null;
+window.addEventListener("beforeinstallprompt", e => {
+  e.preventDefault();
+  installEvent = e;
+  $("installBtn").hidden = false;
+});
+$("installBtn").addEventListener("click", async () => {
+  if (!installEvent) return;
+  installEvent.prompt();
+  const { outcome } = await installEvent.userChoice;
+  installEvent = null;
+  $("installBtn").hidden = true;
+  if (outcome === "accepted") notice("앱을 설치했어요. 홈 화면의 '아침 날씨' 아이콘으로 열 수 있어요.");
+});
+window.addEventListener("appinstalled", () => { $("installBtn").hidden = true; });
 
 /* ═══════════════════════════════════════════════
    11. 시작
