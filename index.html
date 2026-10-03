@@ -99,6 +99,35 @@
   .d .v { font-size: 20px; font-weight: 600; margin-top: 6px; font-variant-numeric: tabular-nums; }
   .d .v small { font-size: 13px; font-weight: 500; color: var(--text-soft); margin-left: 3px; }
 
+  /* ── 미세먼지 (한국 환경부 4단계 기준) ── */
+  :root { --aq1: #2f80ed; --aq2: #22a05a; --aq3: #f2a33a; --aq4: #e5484d; }
+  .air { margin-top: 16px; padding: 20px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .air h2 { grid-column: 1 / -1; margin-bottom: 2px; }
+  .air .msg { grid-column: 1 / -1; font-size: 14px; color: var(--text-soft); }
+  .aq { background: var(--chip); border-radius: 14px; padding: 12px 14px; }
+  .aq .k { font-size: 13px; color: var(--text-soft); }
+  .aq .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+  .aq .v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .aq .v small { font-size: 13px; font-weight: 500; color: var(--text-soft); margin-left: 3px; }
+  .grade { font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 999px; color: #fff; white-space: nowrap; }
+  .grade.g1 { background: var(--aq1); }
+  .grade.g2 { background: var(--aq2); }
+  .grade.g3 { background: var(--aq3); color: #3b2a00; }
+  .grade.g4 { background: var(--aq4); }
+  .aq-scale { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; margin-top: 10px; }
+  .aq-scale i { height: 6px; opacity: .45; }
+  .aq-scale i:nth-child(1) { background: var(--aq1); border-radius: 3px 0 0 3px; }
+  .aq-scale i:nth-child(2) { background: var(--aq2); }
+  .aq-scale i:nth-child(3) { background: var(--aq3); }
+  .aq-scale i:nth-child(4) { background: var(--aq4); border-radius: 0 3px 3px 0; }
+  .aq-scale i.on { opacity: 1; }
+  .aq-scale b { position: absolute; top: -3px; width: 4px; height: 12px; margin-left: -2px; border-radius: 2px;
+    background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.25); }
+  .aq-legend { display: grid; grid-template-columns: repeat(4, 1fr); font-size: 11px; color: var(--text-soft); margin-top: 4px; }
+  .aq-legend span { white-space: nowrap; text-align: center; }
+  .aq-legend span:first-child { text-align: left; }
+  .aq-legend span:last-child { text-align: right; direction: rtl; }
+
   /* ── 내일 날씨 미리보기 ── */
   .tomorrow { margin-top: 16px; padding: 20px; display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; align-items: center; }
   .tomorrow h2 { grid-column: 1 / -1; margin-bottom: 0; }
@@ -163,11 +192,18 @@
     .details { grid-template-columns: repeat(2, 1fr); padding: 16px; }
     .hourly, .daily { padding: 16px; }
     .tomorrow { grid-template-columns: 1fr; padding: 16px; }
+    .air { padding: 16px; gap: 8px; }
+    .aq { padding: 12px; }
+    .aq .v { font-size: 19px; }
+    .grade { padding: 3px 9px; font-size: 12px; }
     .hours { grid-template-columns: repeat(4, 1fr); overflow: visible; }
     .day { grid-template-columns: 40px 28px 48px 1fr 30px 30px; gap: 6px; }
     .day .pop { font-size: 12px; white-space: nowrap; }
     .day .lo, .day .hi { font-size: 14px; }
     .day svg { width: 28px; height: 28px; }
+  }
+  @media (max-width: 400px) {
+    .aq-legend { display: none; }   /* 좁은 화면에선 글자가 겹쳐서 숨김 (색 배지에 등급이 이미 보임) */
   }
   @media (max-width: 360px) {
     .big-temp { font-size: 60px; }
@@ -271,6 +307,8 @@
       </div>
     </section>
 
+    <section class="card air" id="air" aria-label="미세먼지"></section>
+
     <section class="card tomorrow" id="tomorrow" aria-label="내일 날씨 미리보기"></section>
 
     <section class="card hourly">
@@ -324,6 +362,7 @@ const SAMPLE = {
   lat: 37.5683, lon: 126.9778, countryCode: "KR",
   current: { main: "Clouds", night: false, description: "구름 조금", temp: 15, feels_like: 14, humidity: 68,
     pressure: 1018, wind_speed: "2.6", wind_deg: 315, visibility: 10000, sunrise: T(2, 6, 22), sunset: T(2, 18, 11) },
+  air: { pm10: 45, pm25: 38 },
   hourly: [
     { time: "09:00", main: "Clouds", temp: 16, pop: 0 },
     { time: "12:00", main: "Clear",  temp: 21, pop: 0 },
@@ -464,14 +503,19 @@ async function call(path, params) {
 
 async function loadWeather(city) {
   const p = { lat: city.lat, lon: city.lon, units: "metric", lang: "kr" };
-  const [now, fc] = await Promise.all([call("/data/2.5/weather", p), call("/data/2.5/forecast", p)]);
-  return { now, fc };
+  const [now, fc, air] = await Promise.all([
+    call("/data/2.5/weather", p),
+    call("/data/2.5/forecast", p),
+    // 미세먼지는 못 받아와도 날씨는 보여주도록, 실패하면 null로 둔다
+    call("/data/2.5/air_pollution", { lat: city.lat, lon: city.lon }).catch(() => null)
+  ]);
+  return { now, fc, air };
 }
 
 /* ═══════════════════════════════════════════════
    6. API 응답 → 화면용 데이터로 정리
    ═══════════════════════════════════════════════ */
-function shape(city, { now, fc }) {
+function shape(city, { now, fc, air }) {
   const tz = (fc.city && fc.city.timezone != null) ? fc.city.timezone : now.timezone;
   const nowLocal = local(now.dt, tz);
   const w = now.weather[0];
@@ -508,9 +552,20 @@ function shape(city, { now, fc }) {
       visibility: now.visibility ?? null,
       sunrise: local(now.sys.sunrise, tz), sunset: local(now.sys.sunset, tz)
     },
+    air: readAir(air),
     hourly, daily,
     tomorrow: makeTomorrow(fc, tz, nowLocal)
   };
+}
+
+/* ───────────────────────────────────────────────
+   미세먼지: 대기질 API 응답에서 PM10, PM2.5 값(㎍/㎥)만 꺼낸다.
+   (응답 모양: { list: [ { components: { pm10: 23.4, pm2_5: 11.2, … } } ] })
+   ─────────────────────────────────────────────── */
+function readAir(air) {
+  const c = air && air.list && air.list[0] && air.list[0].components;
+  if (!c || !isFinite(c.pm10) || !isFinite(c.pm2_5)) return null;
+  return { pm10: r(c.pm10), pm25: r(c.pm2_5) };
 }
 
 /* ───────────────────────────────────────────────
@@ -598,6 +653,19 @@ function groupByLocalDate(fc, tz, nowLocal) {
   return { daily, todayThin };
 }
 
+/* 한국 환경부 미세먼지 예보 등급 (단위 ㎍/㎥, 값 이하면 그 등급)
+   · 미세먼지 PM10   : 좋음 0~30 · 보통 31~80 · 나쁨 81~150 · 매우나쁨 151 이상
+   · 초미세먼지 PM2.5: 좋음 0~15 · 보통 16~35 · 나쁨 36~75  · 매우나쁨 76 이상 */
+const AQ_LABEL = ["좋음", "보통", "나쁨", "매우나쁨"];
+const AQ_LIMIT = { pm10: [30, 80, 150], pm25: [15, 35, 75] };
+const aqGrade = (kind, v) => { const i = AQ_LIMIT[kind].findIndex(lim => v <= lim); return i === -1 ? 3 : i; };  // 0~3
+// 막대 위 표시 위치(%): 4칸을 똑같은 너비로 나누고, 칸 안에서는 값만큼 비례해서 놓는다
+function aqPos(kind, v) {
+  const lim = AQ_LIMIT[kind], g = aqGrade(kind, v);
+  const lo = g === 0 ? 0 : lim[g - 1], hi = g === 3 ? lim[2] * 2 : lim[g];
+  return Math.min(100, (g + Math.min(1, (v - lo) / (hi - lo))) * 25);
+}
+
 function makeTip(d) {
   const tips = [];
   const rain = d.hourly.find(h => h.pop >= 50 && WET.includes(h.main)) || d.hourly.find(h => h.pop >= 50);
@@ -609,7 +677,15 @@ function makeTip(d) {
   if (gap >= 10) tips.push(`${d.firstIsToday ? "" : "내일은 "}일교차가 ${gap}도로 커요. 얇은 겉옷을 챙기면 좋아요.`);
   if (d.daily[0].max >= 30) tips.push("낮 기온이 30도를 넘어요. 물을 자주 마시세요.");
   if (d.daily[0].min <= 0) tips.push("영하로 내려가요. 따뜻하게 입으세요.");
-  return tips.length ? "☂︎ " + tips.join(" ") : "외출하기 좋은 날씨예요.";
+  if (d.air) {
+    const bad = [["미세먼지", aqGrade("pm10", d.air.pm10)], ["초미세먼지", aqGrade("pm25", d.air.pm25)]].filter(([, g]) => g >= 2);
+    if (bad.length) {
+      const worst = Math.max(...bad.map(([, g]) => g));
+      tips.push(`${bad.map(([n]) => n).join("·")}가 '${AQ_LABEL[worst]}'이에요. 마스크를 챙기세요.`);
+    }
+  }
+  // 앞머리 그림: 비·눈 소식이 있으면 우산, 그 밖의 주의사항만 있으면 전구
+  return tips.length ? (rain ? "☂︎ " : "💡 ") + tips.join(" ") : "외출하기 좋은 날씨예요.";
 }
 
 // 내일 준비물 한 줄 안내
@@ -624,6 +700,22 @@ function makeTomorrowTip(t) {
   if (t.max >= 30) tips.push("낮 기온이 30도를 넘어요. 물을 자주 마시세요.");
   if (t.min <= 0) tips.push("영하로 내려가요. 따뜻하게 입으세요.");
   return tips.length ? "🎒 " + tips.join(" ") : "🎒 내일은 외출하기 좋은 날씨예요.";
+}
+
+function renderAir(d) {
+  const head = `<h2>미세먼지 · 한국 환경부 기준</h2>`;
+  if (!d.air) { $("air").innerHTML = head + `<p class="msg">지금은 미세먼지 정보를 불러오지 못했어요. 잠시 뒤 새로고침해 보세요.</p>`; return; }
+  const items = [["pm10", "미세먼지", "PM10"], ["pm25", "초미세먼지", "PM2.5"]];
+  $("air").innerHTML = head + items.map(([kind, name, code]) => {
+    const v = d.air[kind], g = aqGrade(kind, v);
+    return `
+    <div class="aq" title="${name} ${v}㎍/㎥ → ${AQ_LABEL[g]} (좋음 ~${AQ_LIMIT[kind][0]} · 보통 ~${AQ_LIMIT[kind][1]} · 나쁨 ~${AQ_LIMIT[kind][2]} · 매우나쁨 그 이상)">
+      <div class="k">${name} (${code})</div>
+      <div class="row"><div class="v">${v}<small>㎍/㎥</small></div><span class="grade g${g + 1}">${AQ_LABEL[g]}</span></div>
+      <div class="aq-scale" aria-hidden="true">${[0, 1, 2, 3].map(i => `<i class="${i === g ? "on" : ""}"></i>`).join("")}<b style="left:${aqPos(kind, v)}%"></b></div>
+      <div class="aq-legend" aria-hidden="true">${AQ_LABEL.map(x => `<span>${x}</span>`).join("")}</div>
+    </div>`;
+  }).join("");
 }
 
 function renderTomorrow(d) {
@@ -687,6 +779,7 @@ function render(d, override) {
   $("nowDesc").textContent = override ? override.label : c.description;
   $("nowSub").textContent = `체감 ${c.feels_like}° · ${d.firstIsToday ? "" : "내일 "}최저 ${d.daily[0].min}° / 최고 ${d.daily[0].max}°`;
   $("tip").textContent = makeTip(d);
+  renderAir(d);
   renderTomorrow(d);
 
   const items = [

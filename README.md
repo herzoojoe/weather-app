@@ -4,4 +4,5 @@
 
 - 접속: https://herzoojoe.github.io/weather-app/
 - 날씨 정보: OpenWeather 무료 API
+- 미세먼지(PM10)·초미세먼지(PM2.5): OpenWeather 무료 대기질 API, 한국 환경부 기준(좋음·보통·나쁨·매우나쁨)으로 표시
 - API 키는 파일에 들어 있지 않고, 각자의 브라우저에만 저장됩니다.
