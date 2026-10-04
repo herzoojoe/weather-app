@@ -1,6 +1,6 @@
 {
-  "name": "아침 날씨",
-  "short_name": "아침 날씨",
+  "name": "날씨",
+  "short_name": "날씨",
   "description": "아침에 나가기 전, 오늘·내일 날씨와 미세먼지를 한눈에 보는 앱",
   "lang": "ko",
   "id": "./",
