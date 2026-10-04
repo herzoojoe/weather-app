@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>아침 날씨</title>
+<title>날씨</title>
 <!-- 앱으로 설치하기 위한 정보 (앱 이름·아이콘·상단 색) -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#1d6cc2">
@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="아침 날씨">
+<meta name="apple-mobile-web-app-title" content="날씨">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
@@ -272,7 +272,7 @@
 
   <header class="top">
     <div class="brand-row">
-      <div class="brand">아침 날씨<small id="today"></small></div>
+      <div class="brand">날씨<small id="today"></small></div>
       <button type="button" class="install-btn" id="installBtn" hidden>📲 앱으로 설치</button>
     </div>
     <div class="top-actions">
@@ -1081,7 +1081,7 @@ $("installBtn").addEventListener("click", async () => {
   const { outcome } = await installEvent.userChoice;
   installEvent = null;
   $("installBtn").hidden = true;
-  if (outcome === "accepted") notice("앱을 설치했어요. 홈 화면의 '아침 날씨' 아이콘으로 열 수 있어요.");
+  if (outcome === "accepted") notice("앱을 설치했어요. 홈 화면의 '날씨' 아이콘으로 열 수 있어요.");
 });
 window.addEventListener("appinstalled", () => { $("installBtn").hidden = true; });
 
